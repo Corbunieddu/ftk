@@ -1,0 +1,12 @@
+#ifndef COSTANTSETTINGS_HPP
+#define COSTANTSETTINGS_HPP
+
+
+#define POOL_SIZE 10
+#define DIM_MULTI_LEVEL 20
+
+
+#endif // COSTANTSETTINGS_HPP
+
+
+
