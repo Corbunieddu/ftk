@@ -87,7 +87,7 @@ public:
     std::vector<std::pair<Cluster,Cluster>> data;
     std::ifstream file;
 
-    TracksHandler(const std::string& path_file_clusters, size_t n_events)
+    TracksHandler(const std::string& path_file_clusters, size_t n_events, size_t collapsed_pixels = 1)
         : n_events(n_events) , file(path_file_clusters) { 
         g.seed(rd()); // Inizializza il generatore di numeri casuali
         if (!file.is_open()) {
@@ -127,13 +127,13 @@ public:
                 char comma;
                 if (cluster_ss >> sensor >> comma >> row >> comma >> col) {
 
-                    Cluster cluster(row, col, sensor);
+                    Cluster cluster(row / collapsed_pixels, col / collapsed_pixels, sensor);
                     clusters.emplace_back(cluster);
                 }
             }
             for(auto clu1 : clusters){
                 for(auto clu2 : clusters){
-                    if ( (int)(clu1.sensor/4) - (int)(clu2.sensor/4) == 1 ){
+                    if ( (int)(clu1.sensor/4) - (int)(clu2.sensor/4) == 2 ){
                         data.push_back(std::make_pair(clu1, clu2));
                     }
                 }
@@ -154,7 +154,7 @@ class ClustersHandler{
         std::vector<Cluster> data;
         std::ifstream file;
     
-        ClustersHandler(const std::string& path_file_clusters, size_t n_events)
+        ClustersHandler(const std::string& path_file_clusters, size_t n_events, size_t collapsed_pixels = 1)
             : n_events(n_events) , file(path_file_clusters) { 
             g.seed(rd()); // Inizializza il generatore di numeri casuali
             if (!file.is_open()) {
@@ -190,7 +190,7 @@ class ClustersHandler{
                     char comma;
                     if (cluster_ss >> sensor >> comma >> row >> comma >> col) {
     
-                        Cluster cluster(row, col, sensor);
+                        Cluster cluster(row / collapsed_pixels, col / collapsed_pixels, sensor);
                         data.emplace_back(cluster);
                     }
                 }
