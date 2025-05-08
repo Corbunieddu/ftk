@@ -41,6 +41,7 @@ class FTK{
         float total_iterations = 0;
         size_t current_iterations;
         Patterns_Map<int> Reference;
+        std::vector<std::vector<std::pair<int, Pattern>>> current_topc_task_vector;
         std::vector<std::deque<FastVector<std::pair<MultiLevel,int>>>> circular_topc;
         std::vector<IndexedMinHeap<MultiLevel>> topc;
         std::vector<ReferenceHandler> referenceHandler;
@@ -52,6 +53,7 @@ class FTK{
             topc.resize(POOL_SIZE);
             circular_topc.resize(POOL_SIZE);
             referenceHandler.resize(POOL_SIZE);
+            current_topc_task_vector.resize(POOL_SIZE);
         }
 
         // Permetti il movimento se necessario
@@ -78,47 +80,57 @@ class FTK{
                 pool.enqueue([this, task, &mtx]{
                     auto &buffer_binari = handler.data;
 
-                    Patterns_Map<MultiLevel> current_topc_task;
+                    Patterns_Map<int> current_topc_task;
 
                     for (int idx = task; idx < current_iterations; idx += POOL_SIZE){
                         auto & box = buffer_binari[idx];
-
-                        MultiLevel levels;
-                        int sum = 0;
-                        for ( size_t _i = 0; _i < DIM_MULTI_LEVEL; ++_i){
-                            int value = 1 + random_generator.generate();
-                            levels.levels[_i] = value;
-                            levels.sum_levels += value;
-                        }
-
-                        current_topc_task[box].aggiorna(levels);
+                        
+                        current_topc_task[box]++;
                         
                     }
+                    current_topc_task_vector[task].clear();
+                    current_topc_task_vector[task].resize(current_topc_task.size());
+                    for (auto it = current_topc_task.begin(); it != current_topc_task.end(); it++){
+                        current_topc_task_vector[task].push_back(std::make_pair(it->second, it->first));
+                    }
+                    std::sort(current_topc_task_vector[task].begin(), current_topc_task_vector[task].end(),
+                        [](const std::pair<int, Pattern>& a, const std::pair<int, Pattern>& b) {
+                            return a.first > b.first;
+                        });
+                    
                     auto &topc_task = topc[task];
                     auto &referenceHandler_task = referenceHandler[task];
                     auto &circular_topc_task = circular_topc[task];
 
                     circular_topc_task.push_back({});
                     auto & last = circular_topc_task.back();
+                    
+                    int size = 0;
+                    for (auto it = current_topc_task_vector[task].begin(); it != current_topc_task_vector[task].end(); it++){
+                        if (++size > k) break;
 
-                    
-                    for (auto it = current_topc_task.begin(); it != current_topc_task.end(); it++){
-                        size_t index = referenceHandler_task.insert_element(it->first);
-                        last.push_back(std::make_pair(it->second, index));
+                        size_t index = referenceHandler_task.insert_element(it->second);
+
+                        MultiLevel levels;
+                        int sum = 0;
+                        for ( size_t _i = 0; _i < DIM_MULTI_LEVEL; ++_i){
+                            int max = 0;
+                            for(size_t _j = 0; _j < it->first; _j++){
+                                int value = 1 + random_generator.generate();
+                                if ( value > max) max =value;
+                            }
+                            levels.levels[_i] = max;
+                            levels.sum_levels += max;
+                        }
+                        last.push_back(std::make_pair(levels, index));
                     }
-                    std::sort(last.begin(), last.end(), std::greater<std::pair<MultiLevel,int>>());
-                    
-                    if (last.size() > k) {
-                        auto size = last.size();
-                        for (size_t ind = k; ind < size; ind++) referenceHandler_task.delete_element_byindex(last[ind].second);
-                        last.resize(k);
-                    }
+
                     topc_task.inizializza(referenceHandler_task.size(), k);
                     for ( int _ind = last.size() - 1; _ind >= 0; _ind--){
                         topc_task.aggiorna(last[_ind].second,last[_ind].first);
                     }
                     
-                    if ( circular_topc_task.size() > DimensioneFinestra ) {
+                    if ( time >= DimensioneFinestra ) {
                         auto &front = circular_topc_task.front();
                         size_t size = front.size();
                         for ( size_t ind = 0; ind < size; ++ind){
@@ -150,7 +162,7 @@ class FTK{
 
                     // Rimuovi i vector vuoti dalla deque
                     circular_topc_task.erase(
-                        std::remove_if(circular_topc_task.begin(), circular_topc_task.end(),
+                        std::remove_if(circular_topc_task.begin() + 1, circular_topc_task.end(),
                                     [](const FastVector<std::pair<MultiLevel, int>>& v) { return v.empty(); }),
                         circular_topc_task.end());
 
