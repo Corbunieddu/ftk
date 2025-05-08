@@ -84,12 +84,12 @@ class FTK{
 
                     for (int idx = task; idx < current_iterations; idx += POOL_SIZE){
                         auto & box = buffer_binari[idx];
-                        
+
                         current_topc_task[box]++;
                         
                     }
-                    current_topc_task_vector[task].clear();
                     current_topc_task_vector[task].resize(current_topc_task.size());
+                    current_topc_task_vector[task].clear();
                     for (auto it = current_topc_task.begin(); it != current_topc_task.end(); it++){
                         current_topc_task_vector[task].push_back(std::make_pair(it->second, it->first));
                     }
@@ -130,6 +130,9 @@ class FTK{
                         topc_task.aggiorna(last[_ind].second,last[_ind].first);
                     }
                     
+
+                    // Use `time` instead of `circular_topc_task.size()` because empty containers are removed,
+                    // and the deque size may not reflect the actual number of windows.
                     if ( time >= DimensioneFinestra ) {
                         auto &front = circular_topc_task.front();
                         size_t size = front.size();
