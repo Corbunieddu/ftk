@@ -11,10 +11,11 @@
 #include <unordered_map>
 #include <cstdint>
 #include <random>
-#include <functional>
 #include <algorithm>
 #include <utility>
 #include <functional>
+#include <tuple>
+
 
 
 
@@ -44,9 +45,9 @@ class Cluster {
         }
     };
 
-    template<typename T1, typename T2>
-std::ostream& operator<<(std::ostream& os, const std::pair<T1, T2>& p) {
-    return os  << p.first << "," << p.second;
+    template<typename T1, typename T2,typename T3>
+std::ostream& operator<<(std::ostream& os, const std::tuple<T1, T2, T3>& p) {
+    return os  << std::get<0>(p) << "," << std::get<1>(p) << "," << std::get<2>(p);
 }
 
 
@@ -59,13 +60,19 @@ struct std::hash<Cluster> {
     }
 };
 
+inline void hash_combine(std::size_t& seed, std::size_t hash) {
+    seed ^= hash + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
 namespace std {
     template <>
-    struct hash<std::pair<Cluster, Cluster>> {
-        std::size_t operator()(const std::pair<Cluster, Cluster>& p) const {
-            std::size_t h1 = std::hash<Cluster>{}(p.first);
-            std::size_t h2 = std::hash<Cluster>{}(p.second);
-            return h1 ^ (h2 << 1);  // o qualsiasi combinazione robusta
+    struct hash<std::tuple<Cluster, Cluster, Cluster>> {
+        std::size_t operator()(const std::tuple<Cluster, Cluster, Cluster>& t) const {
+            std::size_t seed = 0;
+            hash_combine(seed, std::hash<Cluster>{}(std::get<0>(t)));
+            hash_combine(seed, std::hash<Cluster>{}(std::get<1>(t)));
+            hash_combine(seed, std::hash<Cluster>{}(std::get<2>(t)));
+            return seed;
         }
     };
 }
@@ -74,7 +81,7 @@ template <typename T>
 using Clusters_Map = std::unordered_map<Cluster,T>;
 
 template <typename T>
-using Tracks_Map = std::unordered_map<std::pair<Cluster,Cluster>,T>;
+using Tracks_Map = std::unordered_map<std::tuple<Cluster,Cluster,Cluster>,T>;
 
 class TracksHandler{
 private:
@@ -83,12 +90,16 @@ private:
     
 public:
     size_t n_events;
-    std::vector<Cluster> clusters;
-    std::vector<std::pair<Cluster,Cluster>> data;
+    std::vector<Cluster> frames_0_clusters;
+    std::vector<Cluster> frames_1_clusters;
+    std::vector<Cluster> frames_2_clusters;
+
+    std::vector<std::tuple<Cluster,Cluster,Cluster>> data;
     std::ifstream file;
+    size_t collapsed_pixels;
 
     TracksHandler(const std::string& path_file_clusters, size_t n_events, size_t collapsed_pixels = 1)
-        : n_events(n_events) , file(path_file_clusters) { 
+        : n_events(n_events) , file(path_file_clusters), collapsed_pixels(collapsed_pixels) { 
         g.seed(rd()); // Inizializza il generatore di numeri casuali
         if (!file.is_open()) {
             std::cerr << "Errore nell'aprire il file: " << path_file_clusters << std::endl;
@@ -98,8 +109,6 @@ public:
     bool time_step(){
         // Carica sul vettore i clusters successivi liberando prima il vettore
         // Se non ci sono più cluster da leggere ritorna false
-
-        clusters.clear();
         data.clear();
         if (file.eof()) {
             return false; // EOF
@@ -121,24 +130,39 @@ public:
             }
             std::stringstream ss(line);
             std::string cluster_str;
+
+            int frame = 10;
             while (std::getline(ss, cluster_str, ';')) {
                 std::stringstream cluster_ss(cluster_str);
                 uint16_t row, col, sensor;
                 char comma;
                 if (cluster_ss >> sensor >> comma >> row >> comma >> col) {
-
+                    int current_frame = int(int(sensor) / 4);
                     Cluster cluster(row / collapsed_pixels, col / collapsed_pixels, sensor);
-                    clusters.emplace_back(cluster);
-                }
-            }
-            for(auto clu1 : clusters){
-                for(auto clu2 : clusters){
-                    if ( (int)(clu1.sensor/4) - (int)(clu2.sensor/4) == 2 ){
-                        data.push_back(std::make_pair(clu1, clu2));
+
+                    if (current_frame == frame){
+                        frames_0_clusters.push_back(cluster);
+                        }
+                    else if (current_frame == frame + 2){
+                        frames_1_clusters.push_back(cluster);
+                    }
+                    else if (current_frame == frame + 4){
+                        frames_2_clusters.push_back(cluster);
                     }
                 }
             }
-            clusters.clear();
+
+            for(auto clu1 : frames_0_clusters){
+                for(auto clu2 : frames_1_clusters){
+                    for (auto clu3 : frames_2_clusters){
+
+                        data.push_back(std::make_tuple(clu1, clu2, clu3));
+                    }
+                }
+            }
+            frames_0_clusters.clear();
+            frames_1_clusters.clear();
+            frames_2_clusters.clear();
         }
         return true; // Successo
     }
@@ -153,9 +177,10 @@ class ClustersHandler{
         size_t n_events;
         std::vector<Cluster> data;
         std::ifstream file;
+        size_t collapsed_pixels;
     
         ClustersHandler(const std::string& path_file_clusters, size_t n_events, size_t collapsed_pixels = 1)
-            : n_events(n_events) , file(path_file_clusters) { 
+            : n_events(n_events) , file(path_file_clusters), collapsed_pixels(collapsed_pixels){ 
             g.seed(rd()); // Inizializza il generatore di numeri casuali
             if (!file.is_open()) {
                 std::cerr << "Errore nell'aprire il file: " << path_file_clusters << std::endl;
@@ -191,6 +216,7 @@ class ClustersHandler{
                     if (cluster_ss >> sensor >> comma >> row >> comma >> col) {
     
                         Cluster cluster(row / collapsed_pixels, col / collapsed_pixels, sensor);
+
                         data.emplace_back(cluster);
                     }
                 }
